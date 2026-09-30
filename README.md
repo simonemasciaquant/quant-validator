@@ -1,5 +1,7 @@
 # quant-validator
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/simonemasciaquant/quant-validator/blob/main/examples/quickstart.ipynb)
+
 **Stop overfitting. Validate your strategy before you trade it.**
 
 Most strategies that look great in backtest fail in production.
@@ -7,6 +9,8 @@ Not because they're wrong, but because they're curve-fitted to the past.
 
 This toolkit runs the standard validation battery on your trade series
 and tells you if your edge is real or noise.
+
+**[Try it in Colab in 30 seconds](https://colab.research.google.com/github/simonemasciaquant/quant-validator/blob/main/examples/quickstart.ipynb)** - no installation required.
 
 ## Install
 
@@ -112,6 +116,7 @@ Or from source:
 ## Roadmap
 
 - [x] Core validation battery (Sharpe, placebo, LOAO, walk-forward, DSR)
+- [x] Quickstart notebook
 - [ ] HTML report with charts
 - [ ] Portfolio-level validation
 - [ ] Integration with backtest frameworks
