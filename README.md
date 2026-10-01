@@ -1,133 +1,145 @@
 # quant-validator
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/simonemasciaquant/quant-validator/blob/main/examples/quickstart.ipynb)
+A rigorous validation toolkit for quantitative trading strategies.
 
-**Stop overfitting. Validate your strategy before you trade it.**
+`quant-validator` provides the statistical and methodological checks you
+need before trusting a backtest: placebo tests, leave-one-asset-out
+cross-validation, walk-forward analysis, deflated Sharpe ratio, event
+clustering, and an account simulator with compounding size and a
+chronological cap.
 
-Most strategies that look great in backtest fail in production.
-Not because they're wrong, but because they're curve-fitted to the past.
+Built to accompany the eBook **Stop Overfitting** (v1.1).
 
-This toolkit runs the standard validation battery on your trade series
-and tells you if your edge is real or noise.
-
-**[Try it in Colab in 30 seconds](https://colab.research.google.com/github/simonemasciaquant/quant-validator/blob/main/examples/quickstart.ipynb)** - no installation required.
-
-## Install
-
-    pip install quant-validator
-
-## 30-second demo
-
-    import pandas as pd
-    from quant_validator.core import Validator
-
-    trades = pd.read_csv('my_trades.csv')
-    v = Validator(trades, capital=10000, max_conc=10)
-    v.run_all(split_date='2024-01-01', n_trials=8)
-    print(v.summary())
-
-You get a single, opinionated report:
-
-    --- BASIC METRICS ---
-      Sharpe (calendar):     0.738
-      Sharpe (active):       1.933
-      Max DD:                -8.57%
-      PF:                    1.456
-      Hit rate:              56.08%
-
-      WARNING: Sharpe active is 2.6x Sharpe calendar.
-
-    --- PLACEBO TEST ---
-      Real PF:               1.932
-      Placebo mean PF:       1.002
-      Percentile:            100.0%
-      >>> PASS (need > 95%)
-
-    --- LOAO ---
-      Min Sharpe:            0.613
-      >>> PASS (need min > 0.5)
-
-    --- WALK-FORWARD ---
-      Stability ratio:       0.605
-      >>> PASS (need ratio > 0.5)
-
-    --- DEFLATED SHARPE RATIO ---
-      DSR:                   0.0000
-      >>> FAIL (need > 0.95)
-
-Interpretation: the strategy has a real edge (placebo, LOAO, walk-forward pass),
-but after correcting for the number of trials tested, the Sharpe is not
-statistically significant (DSR fails). Not tradeable.
-
-## What it tests
-
-| Test | What it detects |
-|---|---|
-| Sharpe (calendar) | True Sharpe including days with no positions |
-| Sharpe (active) | Conditional Sharpe (days with positions only) |
-| Placebo | Whether the signal direction has predictive power |
-| LOAO | Whether the edge is concentrated in one asset |
-| Walk-forward | Whether the strategy survives out-of-sample |
-| Deflated Sharpe Ratio | Whether the Sharpe is significant after multiple testing |
-| Random benchmark | Whether timing beats random entries in same window |
-
-## Why it matters
-
-The toolkit implements methods from:
-
-- Bailey & Lopez de Prado (2014) - The Deflated Sharpe Ratio
-- Lopez de Prado (2018) - Advances in Financial Machine Learning
-- Harvey & Liu (2015) - Backtesting
-
-These are the same methods used by institutional quants. They're not
-proprietary. They're just not packaged for individual researchers.
-
-## Design principles
-
-1. Opinionated verdict. Not just numbers. Pass or fail per test.
-2. No hidden parameters. Every default has a justification.
-3. One function call. `v.run_all()` runs everything.
-4. Calendar and active Sharpe separated. Most tools conflate them.
-5. DSR included by default. Because it's the one test that catches
-   the most common mistake.
-
-## Use cases
-
-- Retail traders: validate your EA before risking capital
-- Prop firm traders: verify robustness before challenges
-- Quant researchers: standard validation battery for papers
-- Small funds: pre-diligence check on strategies
+---
 
 ## Install
 
-    pip install quant-validator
+    pip install git+https://github.com/simonemasciaquant/quant-validator.git
 
-Or from source:
+Or, for local development:
 
     git clone https://github.com/simonemasciaquant/quant-validator.git
     cd quant-validator
     pip install -e .
 
-## Requirements
-
-- Python 3.8+
-- numpy, pandas, scipy
-
-## Roadmap
-
-- [x] Core validation battery (Sharpe, placebo, LOAO, walk-forward, DSR)
-- [x] Quickstart notebook
-- [ ] HTML report with charts
-- [ ] Portfolio-level validation
-- [ ] Integration with backtest frameworks
-- [ ] Case studies from real strategies
-
-## License
-
-MIT - see LICENSE.
+Dependencies: `pandas`, `numpy`. Python 3.9+.
 
 ---
 
-Note: this toolkit does NOT confirm that a strategy will be profitable.
-It only tests whether the backtest is statistically sound. A strategy can
-pass all tests and still lose money. Use at your own risk.
+## Quick start
+
+    import pandas as pd
+    from quant_validator import (
+        build_events, simulate_account, Metrics,
+    )
+
+    ledger = pd.read_csv("ledger_trades.csv")
+    ledger["entry_ts"] = pd.to_datetime(ledger["entry_ts"], utc=True)
+    ledger["exit_ts"]  = pd.to_datetime(ledger["exit_ts"],  utc=True)
+
+    # 1. Cluster trades into events (30-minute gap)
+    clustered = build_events(ledger, gap_minutes=30)
+
+    # 2. Simulate a compounding-size account, max 10 concurrent positions
+    executed, equity, final_capital = simulate_account(
+        ledger,
+        capital_start=10_000,
+        max_concurrent=10,
+    )
+
+    # 3. Standard metrics
+    print("Trades executed:", len(executed))
+    print("Final capital:  ", f"{final_capital:,.2f} EUR")
+    print("Sharpe (calendar):", Metrics.sharpe_from_equity(equity))
+    print("CAGR:             ", Metrics.cagr_from_equity(equity, 10_000))
+    print("Max DD:           ", Metrics.max_dd_from_equity(equity))
+
+---
+
+## What's in the toolkit
+
+| Component | What it does |
+|---|---|
+| `Metrics` | Sharpe, max drawdown, profit factor, and equity-based Sharpe / CAGR / DD |
+| `Simulator` | Flat-sizing backtest engine |
+| `PlaceboTest` | Randomization test against shuffled returns |
+| `LOAO` | Leave-one-asset-out cross-validation |
+| `WalkForward` | In-sample / out-of-sample split analysis |
+| `DSR` | Deflated Sharpe ratio (Bailey & Lopez de Prado, corrected) |
+| `Validator` | Orchestrator that runs the full validation battery |
+| `build_events` | Temporal clustering of trades (default gap: 30 min) |
+| `simulate_account` | Compounding-size account with chronological cap |
+
+---
+
+## Reference case: mean-reversion post-cascade
+
+This is the case study of the eBook **Stop Overfitting** v1.1.
+
+**Strategy.** Fade extreme moves (>3% in 30 minutes) during dead hours
+(02:00-06:00 UTC), with a volume filter (Z-score > 2) and a regime
+filter (BTC above its 200-day SMA on the previous day). Long-only.
+Universe: 13 altcoins.
+
+**Operational parameters.**
+
+- Entry: at the close of the bar following the trigger (within 5 minutes)
+- Target: 30% of `|ret_30m|`
+- Stop: 30% of `|ret_30m|`
+- Timeout: 4 hours
+- Cap: maximum 10 concurrent positions
+- Size: current capital / 10 (compounding)
+- Costs: 4 bps round-trip
+
+**Results (reference ledger v0.3.0).**
+
+| Metric | Value |
+|---|---|
+| Executed trades | 1,635 |
+| Events (gap = 30 min) | 426 |
+| Sharpe (calendar) | 1.52 |
+| CAGR | 7.06% |
+| Max drawdown | -5.64% |
+| Final equity | 15,357.51 EUR |
+| Starting capital | 10,000 EUR |
+
+> **Note.** The numbers published in *Stop Overfitting* v1.1 (1,633 trades,
+> Sharpe 1.44, CAGR 6.35%, MaxDD -11.91%) refer to the previous data
+> pipeline. The v0.3.0 toolkit regenerates the ledger from the corrected
+> pipeline (no look-ahead regime, stop-first fill) and produces the
+> numbers above.
+
+---
+
+## The five validation tests
+
+| Test | What it catches |
+|---|---|
+| Calendar vs active Sharpe | Inflated Sharpe from non-contiguous trading |
+| Placebo | Strategy with no real edge over random entries |
+| LOAO | Over-reliance on a single asset |
+| Walk-forward | In-sample overfitting |
+| DSR | Multiple-testing inflation |
+
+See `docs/methodology.md` for details.
+
+---
+
+## Reproducing the reference case
+
+1. Regenerate the ledger with the corrected pipeline
+   (no look-ahead regime, stop-first fill, 11 columns).
+2. Run the quick-start snippet above.
+3. Run the test suite:
+
+    pytest tests/ -v
+
+The reference regression test
+(`tests/test_simulate.py::test_reference_ledger_numbers`) verifies
+Sharpe, CAGR, MaxDD, and final equity against the ledger.
+
+---
+
+## License
+
+MIT. See `LICENSE`.
